@@ -1,0 +1,100 @@
+import math
+from typing import Dict, List, Optional, Any
+
+class PortNode:
+    """Represents a physical global port or maritime choke point."""
+    def __init__(self, name: str, x: float, y: float, status: str = "OPEN", tariff_mult: float = 1.0):
+        self.name = name
+        self.x = x
+        self.y = y
+        self.status = status          # "OPEN", "CONGESTED", "BLOCKED"
+        self.tariff_mult = tariff_mult  # Modifiers for trade wars / customs taxes
+
+class VouchRoutingEngine:
+    """The core algorithmic engine companies integrate to compute optimal macro routes."""
+    def __init__(self):
+        self.ports: Dict[str, PortNode] = {}
+        self.network: Dict[str, Dict[str, float]] = {}
+
+    def register_port(self, port: PortNode) -> None:
+        """Allows companies to dynamically inject their own ports into the SDK."""
+        self.ports[port.name] = port
+        if port.name not in self.network:
+            self.network[port.name] = {}
+
+    def connect_ports(self, port_a: str, port_b: str, base_transit_hours: float) -> None:
+        """Defines a viable shipping lane and transit time between two nodes."""
+        if port_a in self.network and port_b in self.network:
+            self.network[port_a][port_b] = base_transit_hours
+            self.network[port_b][port_a] = base_transit_hours  # Bidirectional routing
+
+    def compute_route_economics(self, path: List[str], cost_per_hour: float = 1500.0) -> Optional[Dict[str, Any]]:
+        """
+        Executes the core cost matrix. 
+        Ingests any outside path array and evaluates time, bottlenecks, and tariff impacts.
+        """
+        total_time = 0.0
+        total_cost = 0.0
+        
+        for i in range(len(path) - 1):
+            curr, nxt = path[i], path[i+1]
+            
+            # Runtime validation: Ensure nodes exist in injected network
+            if nxt not in self.ports or curr not in self.network:
+                return None
+                
+            # Node Security Check: If a choke point is blocked, the path fails immediately
+            if self.ports[nxt].status == "BLOCKED":
+                return None
+                
+            base_time = self.network[curr].get(nxt, 99999.0)
+            
+            # Congestion Mitigation Logic
+            if self.ports[nxt].status == "CONGESTED":
+                base_time += 72.0  # Simulated 3-day backlog penalty
+                total_cost += 3000.0 * 72.0  # Idling burns extra cash
+                
+            # Dynamic Tariff Assessment (Victoria 3 Multipliers)
+            segment_cost = (base_time * cost_per_hour) * self.ports[nxt].tariff_mult
+            
+            total_time += base_time
+            total_cost += segment_cost
+            
+        return {"transit_time_hours": total_time, "total_operational_cost": total_cost}
+
+# ==============================================================================
+# ENTRY POINT SIMULATION: How an outside company actually runs your SDK
+# ==============================================================================
+if __name__ == "__main__":
+    print("🚀 INITIALISING VOUCH ENTERPRISE SDK (PROTOTYPE MODULE)...")
+    
+    # 1. Instantiate the engine
+    engine = VouchRoutingEngine()
+    
+    # 2. Simulate an outside company streaming their OWN live data into your engine
+    external_port_data = [
+        PortNode("Shanghai", 121, 31),
+        PortNode("Singapore", 103, 1, status="OPEN"),
+        PortNode("Suez_Canal", 32, 30, status="BLOCKED"), # Live data feed flags a blockage!
+        PortNode("Cape_of_Good_Hope", 18, -34),
+        PortNode("Rotterdam", 4, 51)
+    ]
+    
+    for port in external_port_data:
+        engine.register_port(port)
+        
+    # Injecting their specific routing lane maps
+    engine.connect_ports("Shanghai", "Singapore", 25)
+    engine.connect_ports("Singapore", "Suez_Canal", 55)
+    engine.connect_ports("Singapore", "Cape_of_Good_Hope", 70)
+    engine.connect_ports("Suez_Canal", "Rotterdam", 35)
+    engine.connect_ports("Cape_of_Good_Hope", "Rotterdam", 65)
+
+    # 3. Running calculations via the SDK endpoints
+    print("\n🤖 Run calculation through standard route:")
+    legacy_run = engine.compute_route_economics(["Shanghai", "Singapore", "Suez_Canal", "Rotterdam"])
+    print(f"   Result: {legacy_run} (None means the SDK successfully flagged the blockage and protected the fleet)")
+    
+    print("\n🤖 Run calculation through Vouch backup alternative:")
+    optimized_run = engine.compute_route_economics(["Shanghai", "Singapore", "Cape_of_Good_Hope", "Rotterdam"])
+    print(f"   Optimized Results Ingested: {optimized_run}")
